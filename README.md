@@ -24,12 +24,12 @@ Reads multiple sensors simultaneously and sends telemetry data to **Arduino IoT 
 
 The system reads data from 4 sensor types, displays it on a 20×4 LCD, and uploads telemetry to Arduino IoT Cloud:
 
-| Sensor | Measurement | Protocol |
-|---|---|---|
-| PZEM-017 | Voltage, Current, Power, Energy | Modbus RTU (RS485) |
-| Flow Sensor | Flow Rate (L/min) | Pulse / Interrupt |
-| Pressure Transducer | Pressure (bar / MPa) | Analog 0.5–4.5V |
-| Hall Sensor | RPM (Pulse Count) | Pulse / Interrupt |
+| Sensor              | Measurement                     | Protocol           |
+| ------------------- | ------------------------------- | ------------------ |
+| PZEM-017            | Voltage, Current, Power, Energy | Modbus RTU (RS485) |
+| Flow Sensor         | Flow Rate (L/min)               | Pulse / Interrupt  |
+| Pressure Transducer | Pressure (bar / MPa)            | Analog 0.5–4.5V    |
+| Hall Sensor         | RPM (Pulse Count)               | Pulse / Interrupt  |
 
 The system runs as **multitask** on FreeRTOS with tasks distributed across both ESP32 cores:
 
@@ -53,26 +53,27 @@ The system runs as **multitask** on FreeRTOS with tasks distributed across both 
 
 ## Wiring Diagram
 
-| Device | ESP32 Pin | Notes |
-|---|---|---|
-| Flow Sensor (Signal) | GPIO 27 | INPUT_PULLUP, Interrupt FALLING |
-| Pressure Sensor (Analog) | GPIO 34 | Through 10k:22k Voltage Divider |
-| Hall Sensor (Signal) | GPIO 26 | INPUT_PULLUP, Interrupt FALLING |
-| PZEM-017 TX | GPIO 17 | Serial2 TX |
-| PZEM-017 RX | GPIO 16 | Serial2 RX |
-| LCD SDA | GPIO 21 | I2C (default) |
-| LCD SCL | GPIO 22 | I2C (default) |
-| LED Power | GPIO 19 | Active HIGH |
-| LED Status (WiFi) | GPIO 18 | Active HIGH |
+| Device                   | ESP32 Pin | Notes                           |
+| ------------------------ | --------- | ------------------------------- |
+| Flow Sensor (Signal)     | GPIO 27   | INPUT_PULLUP, Interrupt FALLING |
+| Pressure Sensor (Analog) | GPIO 34   | Through 10k:22k Voltage Divider |
+| Hall Sensor (Signal)     | GPIO 26   | INPUT_PULLUP, Interrupt FALLING |
+| PZEM-017 TX              | GPIO 17   | Serial2 TX                      |
+| PZEM-017 RX              | GPIO 16   | Serial2 RX                      |
+| LCD SDA                  | GPIO 21   | I2C (default)                   |
+| LCD SCL                  | GPIO 22   | I2C (default)                   |
+| LED Power                | GPIO 19   | Active HIGH                     |
+| LED Status (WiFi)        | GPIO 18   | Active HIGH                     |
 
 ---
 
 ## Software Prerequisites
 
-1. **[Visual Studio Code](https://code.visualstudio.com/)** — Primary IDE
+1. **[Visual Studio Code](https://code.visualstudio.com/)** — IDE
 2. **[PlatformIO IDE Extension](https://platformio.org/install/ide?install=vscode)** — Install via VS Code Extensions
-3. **[Git](https://git-scm.com/downloads)** — For cloning the repository
-4. **Arduino IoT Cloud Account** — Sign up at [cloud.arduino.cc](https://cloud.arduino.cc/)
+3. **[Antigravity Extension](https://marketplace.visualstudio.com/)** — Install the **Antigravity** extension via VS Code Extensions marketplace for AI-assisted development and pair programming
+4. **[Git](https://git-scm.com/downloads)** — For cloning the repository
+5. **Arduino IoT Cloud Account** — Sign up at [cloud.arduino.cc](https://cloud.arduino.cc/)
 
 ---
 
@@ -96,6 +97,7 @@ code .
 ### 3. Wait for PlatformIO to Install Dependencies
 
 On first open, PlatformIO will download:
+
 - **Platform:** `espressif32`
 - **Libraries:**
   - `LiquidCrystal_I2C` (v1.1.4)
@@ -167,14 +169,14 @@ pio device monitor
 1. Go to [cloud.arduino.cc](https://cloud.arduino.cc/) → **Things** → **Create Thing**
 2. Add the following **Variables**:
 
-| Variable Name | Type | Permission | Update Policy |
-|---|---|---|---|
-| `volt` | Float | Read Only | On Change |
-| `current` | Float | Read Only | On Change |
-| `flow` | Float | Read Only | On Change |
-| `pressure` | Float | Read Only | On Change |
-| `rpm` | Float | Read Only | On Change |
-| `power` | Float | Read Only | On Change |
+| Variable Name | Type  | Permission | Update Policy |
+| ------------- | ----- | ---------- | ------------- |
+| `volt`        | Float | Read Only  | On Change     |
+| `current`     | Float | Read Only  | On Change     |
+| `flow`        | Float | Read Only  | On Change     |
+| `pressure`    | Float | Read Only  | On Change     |
+| `rpm`         | Float | Read Only  | On Change     |
+| `power`       | Float | Read Only  | On Change     |
 
 3. Configure **Device** → Select ESP32 → Copy `DEVICE_LOGIN_NAME` and `DEVICE_KEY`
 4. Configure **Network** → Enter your WiFi SSID and Password
@@ -204,14 +206,14 @@ C4-68-Design-Demonstration-HydroTurbineElectricity/
 
 ## Cloud Variables
 
-| Variable | Description | Unit |
-|---|---|---|
-| `volt` | DC Voltage | V |
-| `current` | DC Current | A |
-| `power` | Electrical Power | W |
-| `flow` | Water Flow Rate | L/min |
-| `pressure` | Water Pressure | bar |
-| `rpm` | Turbine Speed (Pulse Count) | RPM |
+| Variable   | Description                 | Unit  |
+| ---------- | --------------------------- | ----- |
+| `volt`     | DC Voltage                  | V     |
+| `current`  | DC Current                  | A     |
+| `power`    | Electrical Power            | W     |
+| `flow`     | Water Flow Rate             | L/min |
+| `pressure` | Water Pressure              | bar   |
+| `rpm`      | Turbine Speed (Pulse Count) | RPM   |
 
 ---
 
@@ -239,15 +241,15 @@ The following constants can be adjusted in `main.cpp`:
 
 ## Troubleshooting
 
-| Problem | Solution |
-|---|---|
-| Build fails — WiFiNINA not found | `lib_ignore = WiFiNINA` is already set in `platformio.ini` |
-| PZEM read failed | Check TX/RX wiring (GPIO 17/16) and Slave Address (0x01) |
-| LCD not displaying | Verify I2C address with an I2C Scanner — default is `0x27` |
-| WiFi not connecting | Check SSID / Password in `thingProperties.h` |
-| RPM always 0 | Check Hall Sensor wiring and magnet count (`RPM_PULSES_PER_REV`) |
-| Negative pressure reading | Check Voltage Divider — signal must be ≤ 3.3V at GPIO 34 |
-| Upload fails | Hold the BOOT button on ESP32 during upload |
+| Problem                          | Solution                                                         |
+| -------------------------------- | ---------------------------------------------------------------- |
+| Build fails — WiFiNINA not found | `lib_ignore = WiFiNINA` is already set in `platformio.ini`       |
+| PZEM read failed                 | Check TX/RX wiring (GPIO 17/16) and Slave Address (0x01)         |
+| LCD not displaying               | Verify I2C address with an I2C Scanner — default is `0x27`       |
+| WiFi not connecting              | Check SSID / Password in `thingProperties.h`                     |
+| RPM always 0                     | Check Hall Sensor wiring and magnet count (`RPM_PULSES_PER_REV`) |
+| Negative pressure reading        | Check Voltage Divider — signal must be ≤ 3.3V at GPIO 34         |
+| Upload fails                     | Hold the BOOT button on ESP32 during upload                      |
 
 ---
 
