@@ -83,7 +83,12 @@ void IRAM_ATTR flowPulseISR() {
 }
 
 void IRAM_ATTR rpmPulseISR() {
-  rpmData.pulseCount++;
+  static volatile unsigned long lastPulseTime = 0;
+  unsigned long now = micros();
+  if (now - lastPulseTime > 2000) { // 2ms software debounce
+    rpmData.pulseCount++;
+    lastPulseTime = now;
+  }
 }
 
 // ============================================================================
@@ -122,10 +127,11 @@ bool readPowerSensor() {
 }
 
 void readFlowSensor(unsigned long deltaTime) {
-  detachInterrupt(digitalPinToInterrupt(FLOW_SENSOR_PIN));
-
+  static portMUX_TYPE flowMux = portMUX_INITIALIZER_UNLOCKED;
+  portENTER_CRITICAL(&flowMux);
   byte pulses = flowData.pulseCount;
   flowData.pulseCount = 0;
+  portEXIT_CRITICAL(&flowMux);
 
   // Calculate flow rate: (pulses/sec) / calibrationFactor = L/min
   float rate = ((1000.0 / deltaTime) * pulses) / FLOW_CALIBRATION;
@@ -137,8 +143,6 @@ void readFlowSensor(unsigned long deltaTime) {
     flowData.totalML += ml;
     xSemaphoreGive(xMutex);
   }
-
-  attachInterrupt(digitalPinToInterrupt(FLOW_SENSOR_PIN), flowPulseISR, FALLING);
 }
 
 void readPressureSensor() {
@@ -161,13 +165,11 @@ void readPressureSensor() {
 }
 
 void readRPMSensor(unsigned long deltaTime) {
-  detachInterrupt(digitalPinToInterrupt(HALL_SENSOR_PIN));
-
-  // อ่านค่าจาก ISR
+  static portMUX_TYPE rpmMux = portMUX_INITIALIZER_UNLOCKED;
+  portENTER_CRITICAL(&rpmMux);
   unsigned long pulses = rpmData.pulseCount;
   rpmData.pulseCount = 0;
-
-  attachInterrupt(digitalPinToInterrupt(HALL_SENSOR_PIN), rpmPulseISR, FALLING);
+  portEXIT_CRITICAL(&rpmMux);
 
   // === Pulse Count (นับ pulse ต่อช่วงเวลา) ===
   float rpmCount = (pulses / (float)RPM_PULSES_PER_REV) * (60000.0 / deltaTime);
