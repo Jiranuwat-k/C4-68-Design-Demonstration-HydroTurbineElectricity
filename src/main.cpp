@@ -37,6 +37,12 @@
 #define PRESSURE_READ_RATE  500
 #define RPM_READ_RATE       100
 
+// PZEM stale-data protection
+#define PZEM_MAX_FAIL       3   // รีเซ็ต V/I/P หลังอ่านล้มเหลวติดต่อกัน N ครั้ง
+
+// RPM Moving Average
+#define RPM_AVG_SIZE        5   // จำนวนตัวอย่างสำหรับหาค่าเฉลี่ย RPM
+
 // ============================================================================
 // GLOBAL OBJECTS & VARIABLES
 // ============================================================================
@@ -51,6 +57,7 @@ struct PowerData {
   float current = 0.0;
   float power = 0.0;
   float energy = 0.0;
+  bool  valid   = false; // false = อ่านไม่ได้ (แรงดันต่ำเกินไป)
 } powerData;
 
 struct FlowData {
@@ -67,8 +74,13 @@ struct PressureData {
 
 struct RPMData {
   float rpmCount = 0.0;              // วิธี Pulse Count
+  float rpmAvg   = 0.0;              // ค่าเฉลี่ย Moving Average
   volatile unsigned long pulseCount = 0;
 } rpmData;
+
+// RPM Moving Average buffer
+float rpmBuffer[RPM_AVG_SIZE] = {0};
+int   rpmBufIndex = 0;
 
 // FreeRTOS Resources
 TaskHandle_t hTaskCloud, hTaskPZEM, hTaskLCD, hTaskFlow, hTaskPressure, hTaskRPM;
@@ -95,15 +107,32 @@ void IRAM_ATTR rpmPulseISR() {
 // SENSOR READING FUNCTIONS
 // ============================================================================
 
+// ตัวนับการอ่านล้มเหลวติดต่อกันของ PZEM
+static uint8_t pzemFailCount = 0;
+
 bool readPowerSensor() {
   uint8_t result = pzemNode.readInputRegisters(0x0000, 6);
 
   if (result != pzemNode.ku8MBSuccess) {
     Serial.println("PZEM read failed");
+    pzemFailCount++;
+    if (pzemFailCount >= PZEM_MAX_FAIL) {
+      // แรงดันต่ำกว่า 7V → PZEM อ่านไม่ได้ → mark ว่าไม่ valid
+      if (xSemaphoreTake(xMutex, pdMS_TO_TICKS(100))) {
+        powerData.voltage = 0.0;
+        powerData.current = 0.0;
+        powerData.power   = 0.0;
+        powerData.valid   = false;
+        xSemaphoreGive(xMutex);
+      }
+      pzemFailCount = 0;
+    }
     return false;
   }
 
-  if (xSemaphoreTake(xMutex, portMAX_DELAY)) {
+  pzemFailCount = 0; // อ่านสำเร็จ – เคลียร์ fail counter
+
+  if (xSemaphoreTake(xMutex, pdMS_TO_TICKS(100))) {
     // Voltage (register 0)
     powerData.voltage = pzemNode.getResponseBuffer(0x0000) / 100.0;
 
@@ -120,6 +149,7 @@ bool readPowerSensor() {
                          pzemNode.getResponseBuffer(0x0004);
     powerData.energy = energyRaw;
 
+    powerData.valid = true; // อ่านสำเร็จ – ข้อมูลเชื่อถือได้
     xSemaphoreGive(xMutex);
     return true;
   }
@@ -174,8 +204,17 @@ void readRPMSensor(unsigned long deltaTime) {
   // === Pulse Count (นับ pulse ต่อช่วงเวลา) ===
   float rpmCount = (pulses / (float)RPM_PULSES_PER_REV) * (60000.0 / deltaTime);
 
-  if (xSemaphoreTake(xMutex, portMAX_DELAY)) {
-    rpmData.rpmCount = rpmCount;
+  // === Moving Average ===
+  rpmBuffer[rpmBufIndex] = rpmCount;
+  rpmBufIndex = (rpmBufIndex + 1) % RPM_AVG_SIZE;
+
+  float sum = 0.0;
+  for (int i = 0; i < RPM_AVG_SIZE; i++) sum += rpmBuffer[i];
+  float rpmAvg = sum / RPM_AVG_SIZE;
+
+  if (xSemaphoreTake(xMutex, pdMS_TO_TICKS(100))) {
+    rpmData.rpmCount = rpmCount;  // ค่าดิบ (ใช้ใน Cloud / Teleplot)
+    rpmData.rpmAvg   = rpmAvg;   // ค่าเฉลี่ย (ใช้บน LCD)
     xSemaphoreGive(xMutex);
   }
 }
@@ -192,23 +231,34 @@ void updateLCD() {
     snprintf(line1, sizeof(line1),
              "  Generator Monitor   ");  // 20 chars
 
-    // Line 2: Voltage & Current
-    snprintf(line2, sizeof(line2),
-             "V:%.1fV   I:%.2fA   ",
-             powerData.voltage,
-             powerData.current);
+    // Line 2: Voltage & Current (แสดง --- ถ้า PZEM อ่านไม่ได้)
+    if (powerData.valid) {
+      snprintf(line2, sizeof(line2),
+               "V:%.1fV   I:%.2fA   ",
+               powerData.voltage,
+               powerData.current);
+    } else {
+      snprintf(line2, sizeof(line2),
+               "V:---V   I:---A   ");
+    }
 
-    // Line 3: Power & Pressure
-    snprintf(line3, sizeof(line3),
-             "P:%.2fW    %.1fbar   ",
-             powerData.power,
-             pressureData.bar);
+    // Line 3: Power & Pressure (แสดง --- ถ้า PZEM อ่านไม่ได้)
+    if (powerData.valid) {
+      snprintf(line3, sizeof(line3),
+               "P:%.2fW    %.1fbar   ",
+               powerData.power,
+               pressureData.bar);
+    } else {
+      snprintf(line3, sizeof(line3),
+               "P:---W    %.1fbar   ",
+               pressureData.bar);
+    }
 
-    // Line 4: Flowrate & RPM
+    // Line 4: Flowrate & RPM (ใช้ค่าเฉลี่ย)
     snprintf(line4, sizeof(line4),
              "F:%.1fL/m %4drpm ",
              flowData.rate,
-             (int)rpmData.rpmCount);
+             (int)rpmData.rpmAvg);
 
     // แสดงผลบน LCD
     lcd.setCursor(0, 0); lcd.print(line1);

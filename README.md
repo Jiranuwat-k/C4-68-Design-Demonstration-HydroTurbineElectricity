@@ -69,11 +69,10 @@ The system runs as **multitask** on FreeRTOS with tasks distributed across both 
 
 ## Software Prerequisites
 
-1. **[Visual Studio Code](https://code.visualstudio.com/)** — IDE
+1. **[Visual Studio Code](https://code.visualstudio.com/)** — IDE Or **[Antigravity IDE](https://www.antigravity.ai/)** 
 2. **[PlatformIO IDE Extension](https://platformio.org/install/ide?install=vscode)** — Install via VS Code Extensions
-3. **[Antigravity Extension](https://marketplace.visualstudio.com/)** — Install the **Antigravity** extension via VS Code Extensions marketplace for AI-assisted development and pair programming
-4. **[Git](https://git-scm.com/downloads)** — For cloning the repository
-5. **Arduino IoT Cloud Account** — Sign up at [cloud.arduino.cc](https://cloud.arduino.cc/)
+3. **[Git](https://git-scm.com/downloads)** — For cloning the repository
+4. **Arduino IoT Cloud Account** — Sign up at [cloud.arduino.cc](https://cloud.arduino.cc/)
 
 ---
 
